@@ -6,7 +6,8 @@ from .util import *
 
 def model_inversion_stealing(clone_model, split_layer, target, input_size, 
                             lambda_tv=0.1, lambda_l2=1, main_iters=1000, input_iters=100, model_iters=100):
-    x_pred = torch.empty(input_size).fill_(0.5).requires_grad_(True)
+    x_pred = torch.empty(input_size).fill_(0.5).to('cuda:0').requires_grad_(True)
+
     input_opt = torch.optim.Adam([x_pred], lr=0.001, amsgrad=True)
     model_opt = torch.optim.Adam(clone_model.parameters(), lr=0.001, amsgrad=True)
     mse = torch.nn.MSELoss()
@@ -24,6 +25,8 @@ def model_inversion_stealing(clone_model, split_layer, target, input_size,
             loss = mse(pred, target) 
             loss.backward(retain_graph=True)
             model_opt.step()
+        if (main_iter%100) == 0:
+            print(f'epoch:{main_iter} finished!')
 
     return x_pred.detach()
 

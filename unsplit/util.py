@@ -1,4 +1,5 @@
 import torch
+import torchvision
 import matplotlib.pyplot as plt
 from torchvision import datasets, transforms
 import random
@@ -63,6 +64,8 @@ def get_test_score(m1, m2, dataset, split=0):
     score = 0
     imageloader = get_random_example(dataset, count=2000)
     for image, label in imageloader:
+        image = image.to('cuda:0')
+        label = label.to('cuda:0')
         pred = m2(m1(image, end=split), start=split+1)
         if torch.argmax(pred) == label.detach():
             score += 1
