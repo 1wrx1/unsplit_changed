@@ -66,9 +66,14 @@ def get_test_score(m1, m2, dataset, split=0):
     for image, label in imageloader:
         image = image.to('cuda:0')
         label = label.to('cuda:0')
-        pred = m2(m1(image, end=split), start=split+1)
-        if torch.argmax(pred) == label.detach():
-            score += 1
+        m1 = m1.eval()
+        m2 = m2.eval()
+        with torch.no_grad():
+            pred = m2(m1(image, end=split), start=split+1)
+            if torch.argmax(pred) == label.detach():
+                score += 1
+    m1 = m1.train()
+    m2 = m2.train()
     return 100 * score / len(imageloader)
 
 

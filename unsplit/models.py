@@ -239,3 +239,160 @@ class CifarNet(nn.Module):
     def restore_initial_params(self):
         for param, initial in zip(self.parameters(), self.initial_params):
             param.data = initial
+            
+
+# 定义基本的卷积块
+class BasicBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, stride=1):
+        super(BasicBlock, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_channels)
+        
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_channels != out_channels:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_channels)
+            )
+    
+    def forward(self, x):
+        identity = x
+        
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+        
+        out = self.conv2(out)
+        out = self.bn2(out)
+        
+        out += self.shortcut(identity)
+        out = self.relu(out)
+        
+        return out
+            
+
+class ResNet18(nn.Module):
+    def __init__(self, block, layers, num_classes=10):
+        super(ResNet18, self).__init__()
+        self.features = []
+        self.initial = None
+        self.classifier = []
+        self.layers = collections.OrderedDict()
+        self.in_channels = 64
+
+        self.conv11 = nn.Conv2d(
+            in_channels=3,
+            out_channels=64,
+            kernel_size=7,
+            stride=2,
+            padding=3,
+            bias = False
+        )
+        self.features.append(self.conv11)
+        self.layers['conv11'] = self.conv11
+        
+        self.bn1 = nn.BatchNorm2d(64)
+        self.features.append(self.bn1)
+        self.layers['BN1'] = self.bn1
+
+        self.ReLU11 = nn.ReLU(True)
+        self.features.append(self.ReLU11)
+        self.layers['ReLU11'] = self.ReLU11
+        
+        self.maxpool = nn.MaxPool2d(
+            kernel_size=3,
+            stride=2,
+            padding=1
+        )
+        self.features.append(self.maxpool)
+        self.layers['maxpool'] = self.maxpool
+        
+        self.layer1 = self._make_layer(
+            block,
+            64,
+            layers[0],
+            stride=1
+        )
+        self.features.append(self.layer1)
+        self.layers['layer1'] = self.layer1
+        
+        self.layer2 = self._make_layer(
+            block,
+            128,
+            layers[1],
+            stride=2
+        )
+        self.features.append(self.layer2)
+        self.layers['layer2'] = self.layer2
+        
+        self.layer3 = self._make_layer(
+            block,
+            256,
+            layers[2],
+            stride=2
+        )
+        self.features.append(self.layer3)
+        self.layers['layer3'] = self.layer3
+        
+        self.layer4 = self._make_layer(
+            block,
+            512,
+            layers[3],
+            stride=2
+        )
+        self.features.append(self.layer4)
+        self.layers['layer4'] = self.layer4
+        
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.features.append(self.avgpool)
+        self.layers['avgpool'] = self.avgpool
+    
+        self.feature_dims = 512
+        self.fc = nn.Linear(self.feature_dims, num_classes)
+        self.classifier.append(self.fc)
+        self.layers['fc'] = self.fc
+
+        self.initial_params = [param.data for param in self.parameters()]
+        
+    def _make_layer(self, block, out_channels, blocks, stride=1):
+        layer_res = []
+        layer_res.append(block(self.in_channels, out_channels, stride))
+        self.in_channels = out_channels
+        
+        for _ in range(1, blocks):
+            layer_res.append(block(out_channels, out_channels))
+        
+        return nn.Sequential(*layer_res)
+
+    def forward(self, x, start=0, end=9):
+        if start <= len(self.features)-1: # start in self.features
+            for idx, layer in enumerate(self.features[start:]):
+                x = layer(x)
+                if idx == end:
+                    return x
+            x = x.view(-1, self.feature_dims)
+            for idx, layer in enumerate(self.classifier):
+                x = layer(x)
+                if idx + 9 == end:
+                    return x
+        else:
+            if start == 9:
+                x = x.view(-1, self.feature_dims)
+            for idx, layer in enumerate(self.classifier):
+                if idx >= start - 9:
+                    x = layer(x)
+                if idx + 9 == end:
+                    return x
+
+    def get_params(self, end=9):
+        params = []
+        for layer in list(self.layers.values())[:end+1]:
+            params += list(layer.parameters())
+        return params
+
+    def restore_initial_params(self):
+        for param, initial in zip(self.parameters(), self.initial_params):
+            param.data = initial
