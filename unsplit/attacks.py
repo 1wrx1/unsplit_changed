@@ -48,7 +48,8 @@ def model_inversion_white(clone_model, target, input_size,
     for main_iter in range(main_iters):
         for input_iter in range(input_iters):
             input_opt.zero_grad()
-            pred = clone_model(x_pred)
+            pred = clone_model(x_pred, end=1)
+            #print(pred)
             loss = mse(pred, target) + lambda_tv*TV(x_pred) + lambda_l2*l2loss(x_pred)
             loss.backward(retain_graph=True)
             input_opt.step()
